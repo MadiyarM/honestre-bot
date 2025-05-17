@@ -1,37 +1,33 @@
-import sqlite3
+# db.py
+import os
 import json
+import psycopg2
+from psycopg2.extras import Json
 
-DB_PATH = 'reviews.db'
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Инициализация таблицы
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY,
-    data TEXT NOT NULL
-)
-''')
-conn.commit()
-conn.close()
-
+def get_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
 
 def save_review(data: dict):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO reviews (data) VALUES (?)', (json.dumps(data, ensure_ascii=False),))
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO reviews (data) VALUES (%s)",
+        (Json(data),)
+    )
     conn.commit()
+    cur.close()
     conn.close()
 
 def get_reviews_by_complex(name: str) -> list:
-    """Возвращает список словарей с данными отзывов для ЖК name."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT data FROM reviews WHERE json_extract(data, '$.complex_name') = ?",
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT data FROM reviews WHERE data->>'complex_name' = %s ORDER BY created_at DESC",
         (name,)
     )
-    rows = cursor.fetchall()
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
-    # Преобразуем JSON-строки обратно в dict
-    return [json.loads(row[0]) for row in rows]
+    return [r[0] for r in rows]
