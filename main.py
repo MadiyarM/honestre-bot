@@ -1,5 +1,7 @@
 import logging
 from telegram.ext import ApplicationBuilder, CommandHandler
+from telegram.ext import MessageHandler, filters
+
 import config
 
 # Импорты хэндлеров
@@ -36,7 +38,7 @@ def main():
     app.add_handler(search_conv_handler)
 
     # Неизвестные команды и сообщения
-    app.add_handler(CommandHandler(None, unknown))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     # Запуск бота
     logging.info('Бот запущен')
