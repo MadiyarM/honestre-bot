@@ -1,20 +1,22 @@
+# handlers/search.py
 from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
-import db  # здесь функции для получения отзывов
+import db
+from handlers.start import start  # для возврата в меню
 
-# Константа состояния для ConversationHandler
+# Состояние для ConversationHandler
 SEARCH_QUERY = 0
 
-# Кнопки при ошибке или для возврата
+# Кнопки "Повторить ввод" и "Назад"
 BACK_KB = ReplyKeyboardMarkup(
     [["Повторить ввод"], ["Назад"]],
     resize_keyboard=True,
     one_time_keyboard=True
 )
 
-async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
     Триггер: нажатие кнопки "Узнать отзыв о ЖК".
     Спрашиваем у пользователя название ЖК для поиска.
@@ -25,7 +27,7 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return SEARCH_QUERY
 
-async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
     Получаем текст запроса, ищем отзывы в БД и выводим их.
     Поддерживает команды "Повторить ввод" и "Назад".
@@ -34,7 +36,6 @@ async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Пользователь хочет выйти в меню
     if text == "Назад":
-        from handlers.start import start
         await start(update, context)
         return ConversationHandler.END
 
@@ -63,7 +64,6 @@ async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE
         name = r.get('complex_name', '—')
         city = r.get('city', '—')
         await update.message.reply_text(f"🏢 ЖК {name}, {city}")
-        await update.message.reply_text("📍 Сейфуллина, 51")
 
         # Ключевые показатели
         labels = {
@@ -92,15 +92,14 @@ async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         await update.message.reply_text("\n".join(lines))
 
-    # После успешного вывода возвращаемся в меню
-    from handlers.start import start
+    # После вывода возвращаемся в меню
     await start(update, context)
     return ConversationHandler.END
 
 # ConversationHandler для поиска отзывов
 search_conv_handler = ConversationHandler(
     entry_points=[
-        MessageHandler(filters.Regex('^Узнать отзыв о ЖК$'), start_search)
+        MessageHandler(filters.Regex(r'^Узнать отзыв о ЖК$'), start_search)
     ],
     states={
         SEARCH_QUERY: [
@@ -108,6 +107,6 @@ search_conv_handler = ConversationHandler(
         ]
     },
     fallbacks=[
-        MessageHandler(filters.Regex('^Назад$'), handle_search_query)
+        MessageHandler(filters.Regex(r'^Назад$'), handle_search_query)
     ]
 )
