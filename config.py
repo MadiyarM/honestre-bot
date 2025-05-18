@@ -3,7 +3,8 @@ import os
 
 load_dotenv()                  # автоматически загрузит .env
 
-API_TOKEN    = os.getenv("BOT_API_TOKEN")
+API_TOKEN = os.getenv("BOT_API_TOKEN")
+BOT_API_TOKEN = API_TOKEN
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 QUESTIONS = [
