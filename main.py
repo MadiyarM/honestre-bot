@@ -2,40 +2,35 @@ import logging
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
 import config
-# Импорт основного меню: handler и функцию клавиатуры
-from handlers.start import start, menu_handler, get_main_menu
+
+# Импорты хэндлеров
+from handlers.start import start, menu_choice
 from handlers.review import review_conv_handler
 from handlers.search import search_conv_handler
 
-# Логирование
-logging.basicConfig(
-    format='%((asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-
+# Обработчик неизвестных команд/сообщений
 async def unknown(update, context):
-    # Обработчик неизвестных команд или сообщений
     await update.message.reply_text(
         'Я не понял запрос. Пожалуйста, выберите действие в меню.',
-        reply_markup=get_main_menu()
+        reply_markup=menu_choice()
     )
 
 
 def main():
-    # Создаем приложение с токеном из config.API_TOKEN
+    # Создаем приложение с правильным токеном из config
     app = ApplicationBuilder().token(config.API_TOKEN).build()
 
     # Команда /start
     app.add_handler(CommandHandler('start', start))
 
-    # Главное меню: обработка кнопок (регистрация handler-а)
-    app.add_handler(menu_handler)
+    # Главное меню: кнопки из handlers.start
+    app.add_handler(menu_choice)
 
     # ConversationHandlers для отзывов и поиска
     app.add_handler(review_conv_handler)
     app.add_handler(search_conv_handler)
 
-    # Обработка любых других команд
+    # Неизвестные команды (любые другие /команды)
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     logging.info('Бот запущен')
