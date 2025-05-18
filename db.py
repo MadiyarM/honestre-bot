@@ -30,20 +30,25 @@ def save_review(data: dict):
         conn.close()
 
 
-def get_reviews_by_complex(complex_name: str) -> list[dict]:
-    """
-    Возвращает список отзывов для переданного названия ЖК, упорядоченных по дате создания (DESC).
-    Каждый отзыв возвращается как словарь (dict).
-    """
-    conn = get_connection()
-    try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                "SELECT data FROM reviews WHERE data->>%s = %s ORDER BY created_at DESC",
-                ('complex_name', complex_name)
-            )
-            rows = cur.fetchall()
-        # Извлекаем чистые словари из результата
-        return [row['data'] for row in rows]
-    finally:
-        conn.close()
+def get_reviews_by_complex(complex_name):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT
+              phone,
+              city,
+              complex_name,
+              status,
+              heating,
+              electricity,
+              gas,
+              water,
+              noise,
+              mgmt,
+              rent_price,
+              likes,
+              annoy,
+              recommend
+            FROM reviews
+            WHERE complex_name = %s
+        """, (complex_name,))
+        return cur.fetchall()
