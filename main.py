@@ -1,6 +1,5 @@
 import logging
-from telegram.ext import ApplicationBuilder, CommandHandler
-from telegram.ext import MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
 import config
 
@@ -16,7 +15,7 @@ logging.basicConfig(
 )
 
 async def unknown(update, context):
-    # Обработчик неизвестных сообщений
+    # Обработчик неизвестных команд и сообщений
     await update.message.reply_text(
         'Я не понял запрос. Пожалуйста, выберите действие в меню.',
         reply_markup=menu_choice()
@@ -25,19 +24,19 @@ async def unknown(update, context):
 
 def main():
     # Создаем приложение
-    app = ApplicationBuilder().token(config.BOT_API_TOKEN).build()
+    app = ApplicationBuilder().token(config.API_TOKEN).build()
 
     # Команда /start
     app.add_handler(CommandHandler('start', start))
 
-    # Главное меню: обработка кнопок
+    # Главное меню: кнопки из start.menu_choice
     app.add_handler(menu_choice)
 
     # ConversationHandlers
     app.add_handler(review_conv_handler)
     app.add_handler(search_conv_handler)
 
-    # Неизвестные команды и сообщения
+    # Неизвестные команды и любые slash-команды
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     # Запуск бота
