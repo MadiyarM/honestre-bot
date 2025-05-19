@@ -5,13 +5,11 @@ from telegram.ext import (
 )
 import config
 
-# Хэндлеры
-from handlers.start   import start, menu_choice
+from handlers.start   import start, menu_handler, MAIN_MENU
 from handlers.review  import review_conv_handler
 from handlers.search  import search_conv_handler
 
 from db import init_db
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,10 +18,9 @@ logging.basicConfig(
 
 
 async def _unknown(update, context):
-    from handlers.start import _MENU   # чтобы не дублировать клавиатуру
     await update.message.reply_text(
         "Я не понял запрос. Пожалуйста, выберите действие из меню.",
-        reply_markup=_MENU
+        reply_markup=MAIN_MENU
     )
 
 
@@ -40,11 +37,11 @@ async def main() -> None:
 
     # ────────── Роутинг ──────────
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(menu_choice())          # ловим кнопки «📝…» / «🔍…»
+    app.add_handler(menu_handler())          # ловим кнопки «📝…» / «🔍…»
     app.add_handler(review_conv_handler)    # диалог «Оставить отзыв»
     app.add_handler(search_conv_handler)    # диалог «Найти ЖК»
 
-    # неизвестные /команды
+    # неизвестные / команды
     app.add_handler(MessageHandler(filters.COMMAND, _unknown))
 
     logging.info("Bot started")
