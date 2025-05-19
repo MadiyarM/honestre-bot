@@ -7,13 +7,14 @@ from telegram.ext import (
 )
 import config
 from db import save_review
+from handlers.start import MAIN_MENU  # для возврата в главное меню
 
 # Состояния диалога
 ASKING, CONFIRM = range(2)
 
 # Клавиатура подтверждения
 _CONFIRM_KB = ReplyKeyboardMarkup(
-    [["Да", "Нет"]], resize_keyboard=True, one_time_keyboard=True
+    [["Да", "Нет", "Назад"]], resize_keyboard=True, one_time_keyboard=True
 )
 
 # ────────── Точка входа ──────────
@@ -23,6 +24,18 @@ async def entry_start_review(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data["q_idx"] = 0
     await _ask_next_question(update, context)
     return ASKING
+
+
+# ────────── Формируем клавиатуру с «Назад» ──────────
+def _build_markup(options: list[str] | None, allow_back: bool) -> ReplyKeyboardMarkup | None:
+    rows = []
+    if options:
+        rows.append(options)
+    if allow_back:
+        rows.append(["Назад"])
+    if rows:
+        return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True)
+    return None
 
 
 # ────────── Задаём вопросы по очереди ──────────
@@ -50,20 +63,21 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ]
         summary = "\n".join(summary_lines)
         await update.message.reply_text(
-            summary + "\n\nПодтверждаете отзыв?", reply_markup=_CONFIRM_KB
+            summary + "\n\nПодтверждаете отзыв?",
+            reply_markup=_CONFIRM_KB
         )
         return CONFIRM
 
     # иначе — задаём очередной вопрос
     q = config.QUESTIONS[idx]
+    allow_back = idx > 0
 
     if q["type"] == "choice":
-        markup = ReplyKeyboardMarkup(
-            [q["options"]], one_time_keyboard=True, resize_keyboard=True
-        )
+        markup = _build_markup(q["options"], allow_back)
         await update.message.reply_text(q["text"], reply_markup=markup)
     else:
-        await update.message.reply_text(q["text"])
+        markup = _build_markup(None, allow_back)
+        await update.message.reply_text(q["text"], reply_markup=markup)
 
     return ASKING
 
@@ -73,6 +87,14 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     idx = context.user_data["q_idx"]
     q   = config.QUESTIONS[idx]
     text = (update.message.text or "").strip()
+
+    # Кнопка «Назад»
+    if text.lower() == "назад":
+        if idx == 0:
+            await update.message.reply_text("Вы уже на первом вопросе.")
+            return ASKING
+        context.user_data["q_idx"] -= 1
+        return await _ask_next_question(update, context)
 
     # Валидация
     if q["type"] == "rating":
@@ -101,17 +123,26 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ────────── Обрабатываем подтверждение ──────────
 async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip().lower()
+    if text == "назад":
+        # возвращаемся к последнему вопросу
+        context.user_data["q_idx"] = len(config.QUESTIONS) - 1
+        return await _ask_next_question(update, context)
+
     if text == "да":
         await save_review(context.user_data["answers"])
         await update.message.reply_text(
-            "Спасибо! Отзыв принят ✅", reply_markup=ReplyKeyboardRemove()
+            "Спасибо! Отзыв принят ✅",
+            reply_markup=ReplyKeyboardRemove()
         )
         return ConversationHandler.END
     elif text == "нет":
-        # перезапускаем опрос с нуля
-        return await entry_start_review(update, context)
+        await update.message.reply_text(
+            "Ок, возвращаюсь в меню. Выберите действие:",
+            reply_markup=MAIN_MENU
+        )
+        return ConversationHandler.END
     else:
-        await update.message.reply_text("Пожалуйста, нажмите 'Да' или 'Нет'.")
+        await update.message.reply_text("Пожалуйста, нажмите 'Да', 'Нет' или 'Назад'.")
         return CONFIRM
 
 
