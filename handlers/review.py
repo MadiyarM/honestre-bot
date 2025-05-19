@@ -1,5 +1,5 @@
 from telegram import (
-    Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+    Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 )
 from telegram.ext import (
     ContextTypes, ConversationHandler,
@@ -8,26 +8,23 @@ from telegram.ext import (
 import config
 from db import save_review
 
-ASKING = 0   # единственное состояние
+ASKING = 0  # единственное состояние диалога
 
 
-# ────────── Conversation entry ──────────
+# ────────── Точка входа ──────────
 async def entry_start_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Точка входа как от команды /review, так и от кнопки меню.
-    """
     context.user_data.clear()
     context.user_data["answers"] = {}
-    context.user_data["q_idx"]  = 0
+    context.user_data["q_idx"] = 0
     await _ask_next_question(update, context)
     return ASKING
 
 
-# ────────── Логика задавания вопросов ──────────
+# ────────── Задаём вопросы по очереди ──────────
 async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     idx = context.user_data["q_idx"]
 
-    # Все вопросы пройдены → сохраним
+    # все вопросы заданы — сохраняем
     if idx >= len(config.QUESTIONS):
         await save_review(context.user_data["answers"])
         await update.message.reply_text(
@@ -46,17 +43,15 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(q["text"])
 
-    # Остаёмся в состоянии ASKING
     return ASKING
 
 
-# ────────── Приём ответа пользователя ──────────
+# ────────── Принимаем ответ ──────────
 async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     idx = context.user_data["q_idx"]
     q   = config.QUESTIONS[idx]
     text = (update.message.text or "").strip()
 
-    # Валидация «rating»
     if q["type"] == "rating":
         try:
             val = int(text)
@@ -67,17 +62,15 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ASKING
         context.user_data["answers"][q["key"]] = val
 
-    # Выбор из вариантов
     elif q["type"] == "choice":
         if text not in q["options"]:
             await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
             return ASKING
         context.user_data["answers"][q["key"]] = text
 
-    else:  # простой текст
+    else:
         context.user_data["answers"][q["key"]] = text
 
-    # Переходим к следующему вопросу
     context.user_data["q_idx"] += 1
     return await _ask_next_question(update, context)
 
@@ -90,14 +83,12 @@ async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# ────────── Public ConversationHandler ──────────
+# ────────── ConversationHandler ──────────
 review_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler("review", entry_start_review),
-        # Кнопка меню ловится отдельным message‑handler'ом в start.py
+        MessageHandler(filters.Regex(r"^📝 Оставить отзыв$"), entry_start_review),
     ],
-    states={
-        ASKING: [MessageHandler(filters.TEXT & ~filters.COMMAND, _collect_answer)]
-    },
+    states={ASKING: [MessageHandler(filters.TEXT & ~filters.COMMAND, _collect_answer)]},
     fallbacks=[CommandHandler("cancel", _cancel)],
 )
