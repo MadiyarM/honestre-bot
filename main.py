@@ -24,33 +24,35 @@ async def _unknown(update, context):
 
 
 def build_application() -> Application:
-    """Создаём и настраиваем объект Application без запуска polling."""
     app = (
         Application.builder()
         .token(config.API_TOKEN)
         .build()
     )
-
-    # ────────── Роутинг ──────────
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(menu_handler())          # ловим кнопки «📝…» / «🔍…»
-    app.add_handler(review_conv_handler)    # диалог «Оставить отзыв»
-    app.add_handler(search_conv_handler)    # диалог «Найти ЖК»
-
-    # неизвестные / команды
+    app.add_handler(menu_handler())
+    app.add_handler(review_conv_handler)
+    app.add_handler(search_conv_handler)
     app.add_handler(MessageHandler(filters.COMMAND, _unknown))
     return app
 
 
 def main() -> None:
-    """Точка входа для systemd: синхронная функция без вложенных event-loop'ов."""
-    # 1) Инициализация БД (асинхронная) – выполним и закроем цикл
-    asyncio.run(init_db())
+    """Синхронная точка входа, создаём и назначаем event‑loop вручную."""
+    # Создаём новый event‑loop и делаем его текущим (иначе PTB не найдёт его)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-    # 2) Запускаем Telegram‑бот
+    # Миграция БД — один раз в этом же loop
+    loop.run_until_complete(init_db())
+
+    # Запускаем Telegram‑бот (run_polling сам использует текущий loop)
     app = build_application()
     logging.info("Bot started")
-    app.run_polling(allowed_updates=["message"])
+    app.run_polling(allowed_updates=["message"], close_loop=False)
+
+    # Чистое завершение
+    loop.close()
 
 
 if __name__ == "__main__":
