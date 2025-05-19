@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, SmallInteger, Text, DateTime, func
+    Column, Integer, String, Boolean, SmallInteger, Text, DateTime, func
 )
 from db import Base
 
@@ -22,6 +22,6 @@ class Review(Base):
     rent_price   = Column(String(64))
     likes        = Column(Text)
     annoy        = Column(Text)
-    recommend    = Column(String(8))
+    recommend    = Column(Boolean, nullable=False)
 
     created_at   = Column(DateTime(timezone=True), server_default=func.now())

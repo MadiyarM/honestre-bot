@@ -129,6 +129,9 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await _ask_next_question(update, context)
 
     if text == "да":
+        answers = context.user_data["answers"]
+        answers["recommend"] = True if answers.get("recommend") == "Да" else False
+
         await save_review(context.user_data["answers"])
         await update.message.reply_text(
             "Спасибо! Отзыв принят ✅",
