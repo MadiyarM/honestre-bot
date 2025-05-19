@@ -1,57 +1,56 @@
-# db.py
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import (
+    create_async_engine, async_sessionmaker
+)
+from sqlalchemy.orm import declarative_base
+from typing import List
 
-# подгружаем .env
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# открываем постоянное подключение
-conn = psycopg2.connect(DATABASE_URL)
+# ────────── Engine / Session ──────────
+engine = create_async_engine(DATABASE_URL, echo=False, future=True)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+Base = declarative_base()
 
 
-def save_review(answers: dict):
+# ────────── CRUD‑утилиты ──────────
+async def init_db() -> None:
     """
-    Сохраняем один отзыв в виде набора столбцов.
-    Ключи answers должны совпадать с именами колонок.
+    Создаёт таблицы при первом запуске.
+    Вызывается из main.py.
     """
-    columns = ", ".join(answers.keys())
-    placeholders = ", ".join(f"%({k})s" for k in answers.keys())
-    sql = (
-        f"INSERT INTO reviews ({columns}) "
-        f"VALUES ({placeholders})"
-    )
-    with conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, answers)
+    # импорт здесь, чтобы избежать циклической зависимости
+    from models import Review
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-def get_reviews_by_complex(complex_name: str) -> list[dict]:
+async def save_review(answers: dict) -> None:
     """
-    Возвращает список отзывов по точному совпадению поля complex_name.
-    Каждый отзыв — dict со всеми полями таблицы.
+    Асинхронно сохраняет отзыв; ключи answers
+    1‑в‑1 соответствуют колонкам модели Review.
     """
-    sql = """
-    SELECT
-      phone,
-      city,
-      complex_name,
-      status,
-      heating,
-      electricity,
-      gas,
-      water,
-      noise,
-      mgmt,
-      rent_price,
-      likes,
-      annoy,
-      recommend
-    FROM reviews
-    WHERE complex_name = %s
+    from models import Review
+    async with async_session() as session:
+        session.add(Review(**answers))
+        await session.commit()
+
+
+async def get_reviews_by_complex(complex_name: str) -> List["Review"]:
     """
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(sql, (complex_name,))
-        return cur.fetchall()
+    Возвращает все отзывы по названию ЖК
+    (регистр не учитывается, ищем вхождение).
+    """
+    from models import Review
+    from sqlalchemy import select
+    async with async_session() as session:
+        stmt = (
+            select(Review)
+            .where(Review.complex_name.ilike(f"%{complex_name}%"))
+            .order_by(Review.id.desc())
+        )
+        res = await session.execute(stmt)
+        return list(res.scalars())

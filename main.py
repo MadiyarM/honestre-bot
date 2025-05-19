@@ -1,41 +1,55 @@
+import asyncio
 import logging
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
-
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, filters
+)
 import config
 
-# Импорты хэндлеров
-from handlers.start import start, menu_choice
-from handlers.review import review_conv_handler
-from handlers.search import search_conv_handler
+# Хэндлеры
+from handlers.start   import start, menu_choice
+from handlers.review  import review_conv_handler
+from handlers.search  import search_conv_handler
 
-# Обработчик неизвестных команд/сообщений
-async def unknown(update, context):
+from db import init_db
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s"
+)
+
+
+async def _unknown(update, context):
+    from handlers.start import _MENU   # чтобы не дублировать клавиатуру
     await update.message.reply_text(
-        'Я не понял запрос. Пожалуйста, выберите действие в меню.',
-        reply_markup=menu_choice()
+        "Я не понял запрос. Пожалуйста, выберите действие из меню.",
+        reply_markup=_MENU
     )
 
 
-def main():
-    # Создаем приложение с правильным токеном из config
-    app = ApplicationBuilder().token(config.API_TOKEN).build()
+async def main() -> None:
+    # 1) Инициализация БД
+    await init_db()
 
-    # Команда /start
-    app.add_handler(CommandHandler('start', start))
+    # 2) Telegram‑приложение
+    app = (
+        Application.builder()
+        .token(config.API_TOKEN)
+        .build()
+    )
 
-    # Главное меню: кнопки из handlers.start
-    app.add_handler(menu_choice)
+    # ────────── Роутинг ──────────
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(menu_choice())          # ловим кнопки «📝…» / «🔍…»
+    app.add_handler(review_conv_handler)    # диалог «Оставить отзыв»
+    app.add_handler(search_conv_handler)    # диалог «Найти ЖК»
 
-    # ConversationHandlers для отзывов и поиска
-    app.add_handler(review_conv_handler)
-    app.add_handler(search_conv_handler)
+    # неизвестные /команды
+    app.add_handler(MessageHandler(filters.COMMAND, _unknown))
 
-    # Неизвестные команды (любые другие /команды)
-    app.add_handler(MessageHandler(filters.COMMAND, unknown))
-
-    logging.info('Бот запущен')
-    app.run_polling()
+    logging.info("Bot started")
+    await app.run_polling(allowed_updates=["message"])
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())

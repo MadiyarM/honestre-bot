@@ -1,112 +1,56 @@
-# handlers/search.py
-from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
-    MessageHandler, filters, ContextTypes, ConversationHandler
+    ContextTypes, ConversationHandler,
+    CommandHandler, MessageHandler, filters
 )
-import db
-from handlers.start import start  # для возврата в меню
+from db import get_reviews_by_complex
 
-# Состояние для ConversationHandler
-SEARCH_QUERY = 0
+ASK_COMPLEX = 0
 
-# Кнопки "Повторить ввод" и "Назад"
-BACK_KB = ReplyKeyboardMarkup(
-    [["Повторить ввод"], ["Назад"]],
-    resize_keyboard=True,
-    one_time_keyboard=True
-)
 
-async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Триггер: нажатие кнопки "Узнать отзыв о ЖК".
-    Спрашиваем у пользователя название ЖК для поиска.
-    """
-    await update.message.reply_text(
-        "🔍 Введите точное название жилого комплекса:",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    return SEARCH_QUERY
+# ────────── Entry ──────────
+async def entry_start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Введите название ЖК для поиска:")
+    return ASK_COMPLEX
 
-async def handle_search_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """
-    Получаем текст запроса, ищем отзывы в БД и выводим их.
-    Поддерживает команды "Повторить ввод" и "Назад".
-    """
-    text = update.message.text.strip()
 
-    # Пользователь хочет выйти в меню
-    if text == "Назад":
-        await start(update, context)
-        return ConversationHandler.END
+# ────────── Получили название, выводим отзывы ──────────
+async def _show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text.strip()
+    reviews = await get_reviews_by_complex(name)
 
-    # Повторный ввод
-    if text == "Повторить ввод":
-        await update.message.reply_text(
-            "🔍 Введите точное название жилого комплекса:",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return SEARCH_QUERY
-
-    # Обычный поиск
-    reviews = db.get_reviews_by_complex(text)
     if not reviews:
-        await update.message.reply_text(
-            f"❌ Отзывов по ЖК '{text}' не найдено."
-        )
-        await update.message.reply_text(
-            "Попробовать снова или вернуться в меню:",
-            reply_markup=BACK_KB
-        )
-        return SEARCH_QUERY
+        await update.message.reply_text("Пока нет отзывов по такому ЖК.")
+    else:
+        for r in reviews:
+            text = (
+                f"📞 <b>{r.phone}</b>\n"
+                f"👤 {r.status}, {r.city}\n"
+                f"🔥 Отопление: {r.heating}/5\n"
+                f"⚡ Электро: {r.electricity}/5 | 💧 Вода: {r.water}/5 | 🔊 Шум: {r.noise}/5\n"
+                f"🏢 УК (застройщик): {r.mgmt}/5\n"
+                f"💰 Аренда: {r.rent_price}\n"
+                f"👍 {r.likes}\n"
+                f"👎 {r.annoy}\n"
+                f"✅ Рекомендовал бы: {r.recommend}"
+            )
+            await update.message.reply_html(text, disable_web_page_preview=True)
 
-    # Если найдено - выводим результаты
-    for r in reviews:
-        name = r.get('complex_name', '—')
-        city = r.get('city', '—')
-        await update.message.reply_text(f"🏢 ЖК {name}, {city}")
-
-        # Ключевые показатели
-        labels = {
-            'water': '💧 Водоснабжение',
-            'electricity': '⚡️ Электроснабжение',
-            'gas': '🔥 Газоснабжение',
-            'noise': '🔊 Шум',
-            'heating': '🔥 Отопление',
-            'mgmt': '🏢 УК (застройщик)'
-        }
-        keys = list(labels.keys())
-        lines = ["🔑 Ключевые показатели"]
-        total = 0
-        for key in keys:
-            raw = r.get(key, 0)
-            try:
-                val = int(raw)
-            except (TypeError, ValueError):
-                val = 0
-            stars = '★' * val + '☆' * (5 - val)
-            line_label = labels[key]
-            lines.append(f"• {line_label}: {stars} ({val}/5)")
-            total += val
-        avg = total / len(keys) if keys else 0
-        lines.append(f"\nВывод: {avg:.1f}")
-
-        await update.message.reply_text("\n".join(lines))
-
-    # После вывода возвращаемся в меню
-    await start(update, context)
     return ConversationHandler.END
 
-# ConversationHandler для поиска отзывов
+
+async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Поиск отменён.")
+    return ConversationHandler.END
+
+
 search_conv_handler = ConversationHandler(
     entry_points=[
-        MessageHandler(filters.Regex(r'^Узнать отзыв о ЖК$'), start_search)
+        CommandHandler("search", entry_start_search),
+        # кнопка меню «🔍 Найти ЖК» ловится в start.menu_choice
     ],
     states={
-        SEARCH_QUERY: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_search_query)
-        ]
+        ASK_COMPLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, _show_results)]
     },
-    fallbacks=[
-        MessageHandler(filters.Regex(r'^Назад$'), handle_search_query)
-    ]
+    fallbacks=[CommandHandler("cancel", _cancel)],
 )
