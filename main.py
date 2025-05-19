@@ -3,12 +3,11 @@ import logging
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters
 )
-import config
 
+import config
 from handlers.start   import start, menu_handler, MAIN_MENU
 from handlers.review  import review_conv_handler
 from handlers.search  import search_conv_handler
-
 from db import init_db
 
 logging.basicConfig(
@@ -24,11 +23,8 @@ async def _unknown(update, context):
     )
 
 
-async def main() -> None:
-    # 1) Инициализация БД
-    await init_db()
-
-    # 2) Telegram‑приложение
+def build_application() -> Application:
+    """Создаём и настраиваем объект Application без запуска polling."""
     app = (
         Application.builder()
         .token(config.API_TOKEN)
@@ -43,10 +39,19 @@ async def main() -> None:
 
     # неизвестные / команды
     app.add_handler(MessageHandler(filters.COMMAND, _unknown))
+    return app
 
+
+def main() -> None:
+    """Точка входа для systemd: синхронная функция без вложенных event-loop'ов."""
+    # 1) Инициализация БД (асинхронная) – выполним и закроем цикл
+    asyncio.run(init_db())
+
+    # 2) Запускаем Telegram‑бот
+    app = build_application()
     logging.info("Bot started")
-    await app.run_polling(allowed_updates=["message"])
+    app.run_polling(allowed_updates=["message"])
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
