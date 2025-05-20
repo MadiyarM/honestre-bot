@@ -8,7 +8,7 @@ from telegram.ext import (
 )
 import config
 from db import save_review
-from handlers.start import MAIN_MENU  # для возврата в главное меню
+from handlers.start import MAIN_MENU, start as cmd_start  # для возврата в меню
 
 # Состояния диалога
 ASKING, CONFIRM = range(2)
@@ -78,13 +78,8 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
     q = config.QUESTIONS[idx]
     allow_back = idx > 0
 
-    if q["type"] == "choice":
-        markup = _build_markup(q["options"], allow_back)
-        await update.message.reply_text(q["text"], reply_markup=markup)
-    else:
-        markup = _build_markup(None, allow_back)
-        await update.message.reply_text(q["text"], reply_markup=markup)
-
+    markup = _build_markup(q.get("options"), allow_back) if q["type"] == "choice" else _build_markup(None, allow_back)
+    await update.message.reply_text(q["text"], reply_markup=markup)
     return ASKING
 
 
@@ -137,7 +132,6 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ────────── Проверка номера телефона ──────────
 def _validate_phone(num: str) -> tuple[bool, str | None]:
-    # Формат +7XXXXXXXXXX (12 символов) или 8XXXXXXXXXX (11 символов)
     if num.startswith("+7") and len(num) == 12 and num[1:].isdigit():
         code = num[2:5]
     elif num.startswith("8") and len(num) == 11 and num.isdigit():
@@ -160,7 +154,6 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "да":
         answers = context.user_data["answers"]
-        # строку "Да/Нет" превращаем в bool
         answers["recommend"] = True if answers.get("recommend") == "Да" else False
         await save_review(answers)
         await update.message.reply_text(
@@ -179,6 +172,14 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CONFIRM
 
 
+# ────────── Прерывание/Перезапуск ──────────
+async def _restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Срабатывает на /start внутри диалога — обнуляем форму и показываем меню."""
+    context.user_data.clear()
+    await cmd_start(update, context)
+    return ConversationHandler.END
+
+
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Операция отменена.", reply_markup=ReplyKeyboardRemove()
@@ -192,9 +193,12 @@ review_conv_handler = ConversationHandler(
         CommandHandler("review", entry_start_review),
         MessageHandler(filters.Regex(r"^📝 Оставить отзыв$"), entry_start_review),
     ],
-    states={
+    states=[
         ASKING:  [MessageHandler(filters.TEXT & ~filters.COMMAND, _collect_answer)],
         CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, _confirm)],
-    },
-    fallbacks=[CommandHandler("cancel", _cancel)],
+    ],
+    fallbacks=[
+        CommandHandler("cancel", _cancel),
+        CommandHandler("start", _restart),
+    ],
 )
