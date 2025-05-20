@@ -1,3 +1,4 @@
+import re
 from telegram import (
     Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 )
@@ -16,6 +17,13 @@ ASKING, CONFIRM = range(2)
 _CONFIRM_KB = ReplyKeyboardMarkup(
     [["Да", "Нет", "Назад"]], resize_keyboard=True, one_time_keyboard=True
 )
+
+# Допустимые коды операторов
+_VALID_CODES = {
+    "700","701","702","703","704","705","706","707","708","709",
+    "747","750","751","760","761","762","763","764",
+    "771","775","776","777","778","727",
+}
 
 # ────────── Точка входа ──────────
 async def entry_start_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,7 +50,6 @@ def _build_markup(options: list[str] | None, allow_back: bool) -> ReplyKeyboardM
 async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     idx = context.user_data["q_idx"]
 
-    # все вопросы заданы — показываем сводку и просим подтверждение
     if idx >= len(config.QUESTIONS):
         answers = context.user_data["answers"]
         summary_lines = [
@@ -59,7 +66,7 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"💰 Аренда: {answers.get('rent_price')}",
             f"👍 Нравится: {answers.get('likes')}",
             f"👎 Раздражает: {answers.get('annoy')}",
-            f"✅ Рекомендация: {answers.get('recommend')}",
+            f"✅ Рекомендация: {'Да' if answers.get('recommend') else 'Нет'}",
         ]
         summary = "\n".join(summary_lines)
         await update.message.reply_text(
@@ -68,7 +75,6 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return CONFIRM
 
-    # иначе — задаём очередной вопрос
     q = config.QUESTIONS[idx]
     allow_back = idx > 0
 
@@ -96,8 +102,16 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["q_idx"] -= 1
         return await _ask_next_question(update, context)
 
-    # Валидация
-    if q["type"] == "rating":
+    # Специальная валидация телефона
+    if q["key"] == "phone":
+        valid, err = _validate_phone(text)
+        if not valid:
+            await update.message.reply_text(err)
+            return ASKING
+        context.user_data["answers"][q["key"]] = text
+
+    # Валидация рейтингов
+    elif q["type"] == "rating":
         try:
             val = int(text)
             if not 1 <= val <= 5:
@@ -107,6 +121,7 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ASKING
         context.user_data["answers"][q["key"]] = val
 
+    # Выбор из списка
     elif q["type"] == "choice":
         if text not in q["options"]:
             await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
@@ -120,19 +135,34 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await _ask_next_question(update, context)
 
 
+# ────────── Проверка номера телефона ──────────
+def _validate_phone(num: str) -> tuple[bool, str | None]:
+    # Формат +7XXXXXXXXXX (12 символов) или 8XXXXXXXXXX (11 символов)
+    if num.startswith("+7") and len(num) == 12 and num[1:].isdigit():
+        code = num[2:5]
+    elif num.startswith("8") and len(num) == 11 and num.isdigit():
+        code = num[1:4]
+    else:
+        return False, "❗️ Неверный формат. Введите номер в формате +7XXXXXXXXXX или 8XXXXXXXXXX"
+
+    if code not in _VALID_CODES:
+        return False, "❗️ Неверный формат. Введите действительный номер"
+
+    return True, None
+
+
 # ────────── Обрабатываем подтверждение ──────────
 async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip().lower()
     if text == "назад":
-        # возвращаемся к последнему вопросу
         context.user_data["q_idx"] = len(config.QUESTIONS) - 1
         return await _ask_next_question(update, context)
 
     if text == "да":
         answers = context.user_data["answers"]
+        # строку "Да/Нет" превращаем в bool
         answers["recommend"] = True if answers.get("recommend") == "Да" else False
-
-        await save_review(context.user_data["answers"])
+        await save_review(answers)
         await update.message.reply_text(
             "Спасибо! Отзыв принят ✅",
             reply_markup=ReplyKeyboardRemove()
