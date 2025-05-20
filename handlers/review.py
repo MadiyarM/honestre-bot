@@ -85,13 +85,51 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q   = config.QUESTIONS[idx]
     text = (update.message.text or "").strip()
 
-    # ---- Назад ----
+    # ------ Кнопка «Назад» ------
     if text.lower() == "назад":
         if idx == 0:
             await update.message.reply_text("Вы уже на первом вопросе.")
             return ASKING
         context.user_data["q_idx"] -= 1
         return await _ask_next_question(update, context)
+
+    # ------ При первом вопросе игнорируем повторное нажатие кнопки меню ------
+    if q["key"] == "phone" and text in {"📝 Оставить отзыв", "🔍 Найти ЖК"}:
+        await update.message.reply_text(q["text"])  # повторяем вопрос о телефоне
+        return ASKING
+
+    # ------ Валидация телефона ------
+    if q["key"] == "phone":
+        ok, err = _validate_phone(text)
+        if not ok:
+            await update.message.reply_text(err)
+            return ASKING
+        context.user_data["answers"][q["key"]] = text
+
+    # ------ Рейтинг ------
+    elif q["type"] == "rating":
+        try:
+            val = int(text)
+            if not 1 <= val <= 5:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("Введите число от 1 до 5.")
+            return ASKING
+        context.user_data["answers"][q["key"]] = val
+
+    # ------ Выбор из списка ------
+    elif q["type"] == "choice":
+        if text not in q["options"]:
+            await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
+            return ASKING
+        context.user_data["answers"][q["key"]] = text
+
+    # ------ Текстовые ответы ------
+    else:
+        context.user_data["answers"][q["key"]] = text
+
+    context.user_data["q_idx"] += 1
+    return await _ask_next_question(update, context)
 
     # ---- Валидация телефона ----
     if q["key"] == "phone":
