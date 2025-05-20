@@ -14,7 +14,7 @@ from handlers.start import MAIN_MENU, start as cmd_start
 ASKING, CONFIRM = range(2)
 
 _CONFIRM_KB = ReplyKeyboardMarkup(
-    [["Да", "Нет", "Назад"]], resize_keyboard=True, one_time_keyboard=True
+    [["Да", "Нет"], ["Назад", "Отменить"]], resize_keyboard=True, one_time_keyboard=True
 )
 
 _VALID_CODES = {
@@ -41,9 +41,11 @@ def _build_markup(options: list[str] | None, allow_back: bool) -> ReplyKeyboardM
     rows: list[list[str]] = []
     if options:
         rows.append(options)
+    extra: list[str] = ["Отменить"]
     if allow_back:
-        rows.append(["Назад"])
-    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True) if rows else None
+        extra.insert(0, "Назад")
+    rows.append(extra)
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=True)
 
 # ────────────────────────────────────────────────────────────────
 # Ask / answer core
@@ -73,25 +75,19 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return CONFIRM
 
     q = config.QUESTIONS[idx]
-    allow_back = idx > 0
-    markup = _build_markup(q.get("options") if q["type"] == "choice" else None, allow_back)
+    markup = _build_markup(q.get("options") if q["type"] == "choice" else None, idx > 0)
     await update.message.reply_text(q["text"], reply_markup=markup)
     return ASKING
 
 async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка ответа на шаге ASKING."""
     text = (update.message.text or "").strip()
 
-    # ----- Полный сброс по /start -----
-    if text == "/start":
-        context.user_data.clear()
-        await cmd_start(update, context)
-        return ConversationHandler.END
+    if text.lower() == "отменить":
+        return await _cancel(update, context)
 
     idx = context.user_data.get("q_idx", 0)
     q   = config.QUESTIONS[idx]
 
-    # ------ Назад ------
     if text.lower() == "назад":
         if idx == 0:
             await update.message.reply_text("Вы уже на первом вопросе.")
@@ -99,15 +95,12 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["q_idx"] -= 1
         return await _ask_next_question(update, context)
 
-    # ------ Валидация телефона ------
     if q["key"] == "phone":
         ok, err = _validate_phone(text)
         if not ok:
             await update.message.reply_text(err)
             return ASKING
         context.user_data["answers"][q["key"]] = text
-
-    # ------ Рейтинг ------
     elif q["type"] == "rating":
         try:
             val = int(text)
@@ -117,48 +110,11 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Введите число от 1 до 5.")
             return ASKING
         context.user_data["answers"][q["key"]] = val
-
-    # ------ Choice ------
     elif q["type"] == "choice":
         if text not in q["options"]:
             await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
             return ASKING
         context.user_data["answers"][q["key"]] = text
-
-    # ------ Plain text ------
-    else:
-        context.user_data["answers"][q["key"]] = text
-
-    context.user_data["q_idx"] += 1
-    return await _ask_next_question(update, context)
-
-    # ------ Валидация телефона ------
-    if q["key"] == "phone":
-        ok, err = _validate_phone(text)
-        if not ok:
-            await update.message.reply_text(err)
-            return ASKING
-        context.user_data["answers"][q["key"]] = text
-
-    # ------ Рейтинг ------
-    elif q["type"] == "rating":
-        try:
-            val = int(text)
-            if not 1 <= val <= 5:
-                raise ValueError
-        except ValueError:
-            await update.message.reply_text("Введите число от 1 до 5.")
-            return ASKING
-        context.user_data["answers"][q["key"]] = val
-
-    # ------ Choice ------
-    elif q["type"] == "choice":
-        if text not in q["options"]:
-            await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
-            return ASKING
-        context.user_data["answers"][q["key"]] = text
-
-    # ------ Plain text ------
     else:
         context.user_data["answers"][q["key"]] = text
 
@@ -186,34 +142,30 @@ def _validate_phone(num: str):
 async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip().lower()
 
+    if text == "отменить":
+        return await _cancel(update, context)
     if text == "назад":
         context.user_data["q_idx"] = len(config.QUESTIONS) - 1
         return await _ask_next_question(update, context)
-
     if text == "да":
-        answers = context.user_data["answers"]
-        answers["recommend"] = answers.get("recommend") == "Да"
-        await save_review(answers)
+        a = context.user_data["answers"]
+        a["recommend"] = a.get("recommend") == "Да"
+        await save_review(a)
         await update.message.reply_text("Спасибо! Отзыв принят ✅", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
-
     if text == "нет":
         await update.message.reply_text("Ок, возвращаюсь в меню. Выберите действие:", reply_markup=MAIN_MENU)
         return ConversationHandler.END
 
-    await update.message.reply_text("Пожалуйста, нажмите 'Да', 'Нет' или 'Назад'.")
+    await update.message.reply_text("Пожалуйста, нажмите 'Да', 'Нет', 'Назад' или 'Отменить'.")
     return CONFIRM
 
 # ────────────────────────────────────────────────────────────────
 # Fallbacks
 # ────────────────────────────────────────────────────────────────
-async def _restart(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await cmd_start(update, context)
-    return ConversationHandler.END
-
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Операция отменена.", reply_markup=ReplyKeyboardRemove())
+    context.user_data.clear()
+    await update.message.reply_text("Операция отменена.", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
 # ────────────────────────────────────────────────────────────────
@@ -230,6 +182,6 @@ review_conv_handler = ConversationHandler(
     },
     fallbacks=[
         CommandHandler("cancel", _cancel),
-        CommandHandler("start", _restart),
+        CommandHandler("start", _cancel),  # /start также как отмена
     ],
 )
