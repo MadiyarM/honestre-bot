@@ -79,7 +79,14 @@ async def _ask_next_question(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ASKING
 
 async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка ответа на шаге ASKING."""
     text = (update.message.text or "").strip()
+
+    # ----- Полный сброс по /start -----
+    if text == "/start":
+        context.user_data.clear()
+        await cmd_start(update, context)
+        return ConversationHandler.END
 
     idx = context.user_data.get("q_idx", 0)
     q   = config.QUESTIONS[idx]
@@ -91,6 +98,39 @@ async def _collect_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return ASKING
         context.user_data["q_idx"] -= 1
         return await _ask_next_question(update, context)
+
+    # ------ Валидация телефона ------
+    if q["key"] == "phone":
+        ok, err = _validate_phone(text)
+        if not ok:
+            await update.message.reply_text(err)
+            return ASKING
+        context.user_data["answers"][q["key"]] = text
+
+    # ------ Рейтинг ------
+    elif q["type"] == "rating":
+        try:
+            val = int(text)
+            if not 1 <= val <= 5:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("Введите число от 1 до 5.")
+            return ASKING
+        context.user_data["answers"][q["key"]] = val
+
+    # ------ Choice ------
+    elif q["type"] == "choice":
+        if text not in q["options"]:
+            await update.message.reply_text("Пожалуйста, выберите вариант из клавиатуры.")
+            return ASKING
+        context.user_data["answers"][q["key"]] = text
+
+    # ------ Plain text ------
+    else:
+        context.user_data["answers"][q["key"]] = text
+
+    context.user_data["q_idx"] += 1
+    return await _ask_next_question(update, context)
 
     # ------ Валидация телефона ------
     if q["key"] == "phone":
