@@ -13,7 +13,8 @@ _CONFIRM_KB = ReplyKeyboardMarkup(
     [["Да", "Нет"], ["Назад", "Отменить"]], resize_keyboard=True, one_time_keyboard=True
 )
 
-QUESTIONS = config.QUESTIONS  # вопросов о телефоне больше нет
+# Убираем вопрос о телефоне, если он ещё остался в config
+QUESTIONS = [q for q in config.QUESTIONS if q.get("key") != "phone"]
 
 # ────────────────────────────────────────────────────────────────
 # Entry
