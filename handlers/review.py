@@ -1,24 +1,29 @@
+from datetime import datetime, timedelta
+
 from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 from telegram.ext import (
     ContextTypes, ConversationHandler,
     CommandHandler, MessageHandler, filters
 )
+
 import config
-from db import save_review
+from db import async_session, save_review
 from handlers.start import MAIN_MENU
+from models import Review
 
 ASKING, CONFIRM = range(2)
+
+# временное окно для антиспама (5 минут). После проверки заменим на 86400 (сутки)
+WINDOW_SECONDS = 5 * 60
+MAX_REVIEWS_PER_WINDOW = 2
 
 _CONFIRM_KB = ReplyKeyboardMarkup(
     [["Да", "Нет"], ["Назад", "Отменить"]], resize_keyboard=True, one_time_keyboard=True
 )
 
-# Убираем вопрос о телефоне, если он ещё остался в config
 QUESTIONS = [q for q in config.QUESTIONS if q.get("key") != "phone"]
 
-# ────────────────────────────────────────────────────────────────
-# Entry
-# ────────────────────────────────────────────────────────────────
+# ───────────────── Entry ─────────────────
 async def entry_start_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     context.user_data["answers"] = {"user_id": update.effective_user.id}
@@ -26,9 +31,7 @@ async def entry_start_review(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await _ask_next_question(update, context)
     return ASKING
 
-# ────────────────────────────────────────────────────────────────
-# Helpers
-# ────────────────────────────────────────────────────────────────
+# ───────────────── Helpers ─────────────────
 
 def _build_markup(options, allow_back):
     rows = []
@@ -69,9 +72,7 @@ async def _show_summary(update, context):
     await update.message.reply_text(summary + "\n\nПодтверждаете отзыв?", reply_markup=_CONFIRM_KB)
     return CONFIRM
 
-# ────────────────────────────────────────────────────────────────
-# Collect / Confirm
-# ────────────────────────────────────────────────────────────────
+# ───────────────── Collect ─────────────────
 async def _collect_answer(update, context):
     text = (update.message.text or "").strip()
     if text.lower() == "отменить":
@@ -87,7 +88,7 @@ async def _collect_answer(update, context):
         context.user_data["q_idx"] -= 1
         return await _ask_next_question(update, context)
 
-    # rating / choice / text processing
+    # rating / choice / text
     if q["type"] == "rating":
         try:
             val = int(text)
@@ -108,6 +109,7 @@ async def _collect_answer(update, context):
     context.user_data["q_idx"] += 1
     return await _ask_next_question(update, context)
 
+# ───────────────── Confirm / Save ─────────────────
 async def _confirm(update, context):
     text = (update.message.text or "").strip().lower()
     if text == "отменить":
@@ -115,34 +117,55 @@ async def _confirm(update, context):
     if text == "назад":
         context.user_data["q_idx"] = len(QUESTIONS) - 1
         return await _ask_next_question(update, context)
+
     if text == "да":
-        a = context.user_data["answers"]
-        a["recommend"] = a.get("recommend") == "Да"
-        await save_review(a)
+        answers = context.user_data["answers"]
+        answers["recommend"] = answers.get("recommend") == "Да"
+
+        # ---- rate‑limit check ----
+        window_start = datetime.utcnow() - timedelta(seconds=WINDOW_SECONDS)
+        async with async_session() as session:
+            from sqlalchemy import select, func
+            stmt = (
+                select(func.count())
+                .select_from(Review)
+                .where(
+                    Review.user_id == answers["user_id"],
+                    Review.created_at >= window_start,
+                )
+            )
+            result = await session.execute(stmt)
+            count = result.scalar() or 0
+
+        if count >= MAX_REVIEWS_PER_WINDOW:
+            await update.message.reply_text(
+                "❗ Вы уже оставили 2 отзыва за последние 5 минут. Попробуйте позже.",
+                reply_markup=MAIN_MENU
+            )
+            return ConversationHandler.END
+
+        # ---- save & thanks ----
+        await save_review(answers)
         await update.message.reply_text(
             "Спасибо! Отзыв принят ✅\n\nВыберите дальнейшее действие:",
             reply_markup=MAIN_MENU
         )
         return ConversationHandler.END
+
     if text == "нет":
-        await update.message.reply_text(
-            "Ок, возвращаюсь в меню. Выберите действие:", reply_markup=MAIN_MENU
-        )
+        await update.message.reply_text("Ок, возвращаюсь в меню. Выберите действие:", reply_markup=MAIN_MENU)
         return ConversationHandler.END
+
     await update.message.reply_text("Пожалуйста, нажмите 'Да', 'Нет', 'Назад' или 'Отменить'.")
     return CONFIRM
 
-# ────────────────────────────────────────────────────────────────
-# Cancel
-# ────────────────────────────────────────────────────────────────
+# ───────────────── Cancel ─────────────────
 async def _cancel(update, context):
     context.user_data.clear()
     await update.message.reply_text("Операция отменена.", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
-# ────────────────────────────────────────────────────────────────
-# Handler
-# ────────────────────────────────────────────────────────────────
+# ───────────────── Handler ─────────────────
 review_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler("review", entry_start_review),

@@ -22,7 +22,7 @@ async def _show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         for r in reviews:
             text = (
-                f"🆔 <b>{r.user_id}</b>\n"
+                f"🆔 <b>{r.id}</b>\n"
                 f"🏙️ <b>{r.city}</b> — <i>{r.complex_name}</i>\n"
                 f"👤 {r.status}\n"
                 f"🔥 Отопление: {r.heating}/5 | ⚡ Электро: {r.electricity}/5 | 🛢️ Газ: {r.gas}/5\n"
