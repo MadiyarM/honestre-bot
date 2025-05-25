@@ -46,6 +46,7 @@ async def _show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
     await update.message.reply_text("Поиск отменён.", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
