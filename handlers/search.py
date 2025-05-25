@@ -59,7 +59,7 @@ search_conv_handler = ConversationHandler(
     },
     fallbacks=[
         CommandHandler("cancel", _cancel),
-        CommandHandler("start", start)   # ← завершает диалог и показывает меню
+        CommandHandler("start", _cancel)   # ← завершает диалог и показывает меню
     ],
 )
 
