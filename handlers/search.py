@@ -57,5 +57,10 @@ search_conv_handler = ConversationHandler(
     states={
         ASK_COMPLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, _show_results)]
     },
-    fallbacks=[CommandHandler("cancel", _cancel)],
+    fallbacks=[
+        CommandHandler("cancel", _cancel),
+        CommandHandler("start", start)   # ← завершает диалог и показывает меню
+    ],
 )
+
+
