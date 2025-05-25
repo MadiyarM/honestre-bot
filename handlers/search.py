@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ContextTypes, ConversationHandler,
     CommandHandler, MessageHandler, filters
@@ -9,7 +9,11 @@ from handlers.start import MAIN_MENU
 ASK_COMPLEX = 0
 
 async def entry_start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Введите название ЖК для поиска (минимум 3 символа):")
+    # Показываем кнопку «Отменить» для выхода из поиска
+    cancel_kb = ReplyKeyboardMarkup([["Отменить"]], resize_keyboard=True, one_time_keyboard=True)
+    await update.message.reply_text(
+        "Введите название ЖК для поиска (минимум 3 символа):", reply_markup=cancel_kb
+    )
     return ASK_COMPLEX
 
 async def _show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -56,12 +60,11 @@ search_conv_handler = ConversationHandler(
         MessageHandler(filters.Regex(r"^🔍 Найти ЖК$"), entry_start_search),
     ],
     states={
-        ASK_COMPLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, _show_results)]
+        ASK_COMPLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r"^Отменить$"), _show_results)]
     },
     fallbacks=[
         CommandHandler("cancel", _cancel),
+        MessageHandler(filters.Regex(r"^Отменить$"), _cancel),
         CommandHandler("start", _cancel)   # ← завершает диалог и показывает меню
     ],
 )
-
-
