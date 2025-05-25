@@ -14,7 +14,7 @@ from models import Review
 ASKING, CONFIRM = range(2)
 
 # временное окно для антиспама (5 минут). После проверки заменим на 86400 (сутки)
-WINDOW_SECONDS = 5 * 60
+WINDOW_SECONDS = 86400
 MAX_REVIEWS_PER_WINDOW = 2
 
 _CONFIRM_KB = ReplyKeyboardMarkup(
