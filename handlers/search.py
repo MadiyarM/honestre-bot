@@ -93,12 +93,12 @@ async def _show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_html(card, disable_web_page_preview=True)
 
-    await update.message.reply_text("Поиск завершён.", reply_markup=MAIN_MENU)
+    await update.message.reply_text("Поиск завершён. Надеюсь что помог😊", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Поиск отменён.", reply_markup=MAIN_MENU)
+    await update.message.reply_text("Поиск отменён.🔍❌", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
 search_conv_handler = ConversationHandler(

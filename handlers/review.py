@@ -153,7 +153,7 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             count = (await session.execute(stmt)).scalar() or 0
         if count >= MAX_REVIEWS_PER_WINDOW:
             await update.message.reply_text(
-                "❗ Вы уже оставили 2 отзыва за последние 5 минут. Попробуйте позже.",
+                "❗ Вы уже оставили 2 отзыва за последние сутки. Попробуйте позже.",
                 reply_markup=MAIN_MENU
             )
             return ConversationHandler.END
@@ -176,7 +176,7 @@ async def _confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ───────────────── Cancel ─────────────────
 async def _cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Операция отменена.", reply_markup=MAIN_MENU)
+    await update.message.reply_text("Операция отменена✖️", reply_markup=MAIN_MENU)
     return ConversationHandler.END
 
 # ───────────────── Handler ─────────────────
