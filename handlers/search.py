@@ -39,7 +39,7 @@ def _normalize(text: str) -> str:
 
 async def entry_start_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Введите название ЖК для поиска (минимум 3 символа):",
+        "Введите название ЖК для поиска (минимум 2 символа):",
         reply_markup=CANCEL_KB,
     )
     return ASK_COMPLEX
