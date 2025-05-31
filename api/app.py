@@ -5,6 +5,7 @@ from typing import List, Dict
 
 from db import async_session          # ← импорт существующего Session
 from models import Review
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="HonestRE Mini-app API")
 
@@ -80,3 +81,4 @@ async def reviews(
         for r in reviews
     ]
 
+app.mount("/", StaticFiles(directory="miniapp_front", html=True), name="frontend")

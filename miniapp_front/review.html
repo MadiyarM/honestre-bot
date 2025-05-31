@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оставить отзыв - Честно о ЖК</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h2>📝📸 Оставить отзыв</h2>
+    <form id="reviewForm">
+      <textarea name="reviewText" rows="4" placeholder="Ваш отзыв..." required></textarea>
+      <input type="file" name="photo" accept="image/*">
+      <button type="submit">Отправить отзыв</button>
+    </form>
+    <div class="notification" id="reviewMsg">Спасибо! Ваш отзыв отправлен.</div>
+    <a href="index.html" class="link">← Назад</a>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
