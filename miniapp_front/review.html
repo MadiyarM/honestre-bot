@@ -1,22 +1,95 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Оставить отзыв - Честно о ЖК</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8">
+    <title>Добавить отзыв о&nbsp;ЖК</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h2>📝📸 Оставить отзыв</h2>
-    <form id="reviewForm">
-      <textarea name="reviewText" rows="4" placeholder="Ваш отзыв..." required></textarea>
-      <input type="file" name="photo" accept="image/*">
-      <button type="submit">Отправить отзыв</button>
-    </form>
-    <div class="notification" id="reviewMsg">Спасибо! Ваш отзыв отправлен.</div>
-    <a href="index.html" class="link">← Назад</a>
-  </div>
-  <script src="script.js"></script>
+    <main class="container">
+        <h2>Добавление отзыва</h2>
+
+        <form id="reviewForm">
+            <!-- 🔎 Название ЖК -->
+            <label>
+                <span>Название&nbsp;ЖК</span>
+                <input type="text" id="complexName" placeholder="Арман Кала" required>
+            </label>
+
+            <!-- ⭐️ Общий рейтинг -->
+            <label>
+                <span>Рейтинг (1‑5)</span>
+                <select id="rating">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+            </label>
+
+            <!-- 🏢 Инженерные параметры -->
+            <fieldset>
+                <legend>Инженерные параметры&nbsp;(0‑5)</legend>
+                <label>
+                    <span>Отопление</span>
+                    <input type="number" id="heating" min="0" max="5" value="0">
+                </label>
+                <label>
+                    <span>Электричество</span>
+                    <input type="number" id="electricity" min="0" max="5" value="0">
+                </label>
+                <label>
+                    <span>Вода</span>
+                    <input type="number" id="water" min="0" max="5" value="0">
+                </label>
+                <label>
+                    <span>Шум</span>
+                    <input type="number" id="noise" min="0" max="5" value="0">
+                </label>
+                <label>
+                    <span>УК</span>
+                    <input type="number" id="mgmt" min="0" max="5" value="0">
+                </label>
+            </fieldset>
+
+            <!-- 🔌 Газ -->
+            <label class="inline">
+                <input type="checkbox" id="gas">
+                <span>Газ есть</span>
+            </label>
+
+            <!-- 💲 Аренда -->
+            <label>
+                <span>Стоимость аренды (₸)</span>
+                <input type="number" id="rentPrice" min="0" step="5000" value="0">
+            </label>
+
+            <!-- 👍 / 👎 -->
+            <label>
+                <span>Что понравилось</span>
+                <textarea id="likes" rows="2" placeholder="Плюсы ЖК"></textarea>
+            </label>
+            <label>
+                <span>Что не понравилось</span>
+                <textarea id="annoy" rows="2" placeholder="Минусы ЖК"></textarea>
+            </label>
+
+            <!-- ✅ Рекомендация -->
+            <fieldset>
+                <legend>Рекомендуете&nbsp;ЖК?</legend>
+                <label class="inline"><input type="radio" name="recommend" value="true" checked> Да</label>
+                <label class="inline"><input type="radio" name="recommend" value="false"> Нет</label>
+            </fieldset>
+
+            <button type="submit" id="sendBtn">Отправить</button>
+        </form>
+
+        <div id="result" class="msg"></div>
+    </main>
+
+    <script src="script.js"></script>
 </body>
 </html>

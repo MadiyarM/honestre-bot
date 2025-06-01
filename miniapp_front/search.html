@@ -1,22 +1,26 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Найти ЖК - Честно о ЖК</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="utf-8">
+    <title>Поиск ЖК – HonestRE Mini App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h2>🔍🏢 Найти ЖК</h2>
-    <form id="searchForm">
-      <input type="text" name="complexName" placeholder="Название ЖК" required>
-      <button type="submit">Найти</button>
-    </form>
-    <div class="notification" id="searchMsg">Запрос отправлен, скоро покажем результат.</div>
-    <a href="index.html" class="link">← Назад</a>
-  </div>
-  <script src="script.js"></script>
+    <main class="container">
+        <h2>Найдите свой&nbsp;ЖК</h2>
+
+        <form id="searchForm" class="search-form">
+            <input type="text" id="query" placeholder="Начните вводить…" autocomplete="off" required>
+            <button type="submit">Найти</button>
+        </form>
+
+        <p id="searchMsg" class="msg"></p>
+
+        <section id="resultBlock" class="cards"></section>
+    </main>
+
+    <script src="script.js"></script>
 </body>
 </html>
